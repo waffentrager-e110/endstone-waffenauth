@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "waffenauth"
 version = "1.0.0"
 description = "An authentication plugin using GUI forms."
-authors = [{ name = "YourName" }]
+authors = [{ name = "Waffentrager" }]
 dependencies = [
     "passlib>=1.7.4", # Добавляем passlib для Argon2
     "argon2-cffi>=21.1.0" # Зависимость для Argon2 в passlib
