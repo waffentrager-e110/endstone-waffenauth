@@ -1,4 +1,3 @@
-import asyncio
 import os
 import sqlite3
 from endstone.plugin import Plugin
@@ -20,13 +19,12 @@ class WaffenAuth(Plugin):
         
         self.logger.info(f"  - База данных: {self.db_path}")
         
-        self.reminder_task = asyncio.create_task(self.reminder_loop())
+        # Запускаем напоминания через scheduler (каждые 40 тиков = 2 секунды)
+        self.server.scheduler.run_task(self, self.reminder_tick, delay=20, period=40)
         
         self.logger.info("§aПлагин готов к работе!")
     
     def on_disable(self) -> None:
-        if hasattr(self, 'reminder_task') and self.reminder_task:
-            self.reminder_task.cancel()
         self.logger.info("§cWaffenAuth выгружен.")
     
     def load_config(self) -> dict:
@@ -72,20 +70,19 @@ class WaffenAuth(Plugin):
         conn.commit()
         conn.close()
     
-    async def reminder_loop(self) -> None:
-        while True:
-            await asyncio.sleep(2)
-            try:
-                players = self.get_server().get_online_players()
-                msgs = self.config.get("messages", {})
-                for player in players:
-                    if player.name not in self.auth_players:
-                        player.send_message(msgs.get("reminder_title", "§e========== WaffenAuth =========="))
-                        player.send_message(msgs.get("reminder_register", "§a/register <пароль> §7- Регистрация"))
-                        player.send_message(msgs.get("reminder_login", "§a/login <пароль> §7- Вход"))
-                        player.send_message(msgs.get("reminder_footer", "§e================================="))
-            except Exception as e:
-                self.logger.error(f"Ошибка: {e}")
+    def reminder_tick(self) -> None:
+        """Отправляет напоминания неавторизованным игрокам"""
+        try:
+            players = self.server.get_online_players()
+            msgs = self.config.get("messages", {})
+            for player in players:
+                if player.name not in self.auth_players:
+                    player.send_message(msgs.get("reminder_title", "§e========== WaffenAuth =========="))
+                    player.send_message(msgs.get("reminder_register", "§a/register <пароль> §7- Регистрация"))
+                    player.send_message(msgs.get("reminder_login", "§a/login <пароль> §7- Вход"))
+                    player.send_message(msgs.get("reminder_footer", "§e================================="))
+        except Exception as e:
+            self.logger.error(f"Ошибка в reminder_tick: {e}")
     
     def on_command(self, sender, command, args):
         from endstone import Player
@@ -120,6 +117,7 @@ class WaffenAuth(Plugin):
             conn.close()
             
             sender.send_message(msgs.get("register_success", "§aРегистрация успешна!"))
+            self.logger.info(f"Игрок {name} зарегистрировался")
             return True
         
         elif cmd == "login" and len(args) >= 1:
@@ -133,13 +131,13 @@ class WaffenAuth(Plugin):
             conn.close()
             
             if not row:
-                sender.send_message(msgs.get("not_registered", "§cНе зарегистрирован!"))
+                sender.send_message(msgs.get("not_registered", "§cНе зарегистрирован! Используйте /register"))
                 return True
             
             if row[0] == password:
                 self.auth_players.add(name)
-                sender.send_message(msgs.get("login_success", "§aВход выполнен!"))
-                self.logger.info(f"{name} авторизовался")
+                sender.send_message(msgs.get("login_success", "§aВы успешно вошли!"))
+                self.logger.info(f"Игрок {name} авторизовался")
             else:
                 sender.send_message(msgs.get("wrong_password", "§cНеверный пароль!"))
             
