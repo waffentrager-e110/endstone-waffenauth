@@ -1,16 +1,34 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "endstone-waffenauth"
-version = "0.3.0"
-description = "WaffenAuth - система авторизации для Endstone"
-dependencies = []
-requires-python = ">=3.10"
+name = "waffenauth"
+version = "1.0.0"
+description = "An authentication plugin using GUI forms."
+authors = [{ name = "YourName" }]
+dependencies = [
+    "passlib>=1.7.4", # Добавляем passlib для Argon2
+    "argon2-cffi>=21.1.0" # Зависимость для Argon2 в passlib
+]
 
-[project.entry-points."endstone"]
-waffenauth = "endstone_waffenauth:WaffenAuth"
+[tool.endstone]
+type = "python"
+entry_point = "main:WaffenAuthPlugin"
+api_version = "0.11.3"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[[tool.endstone.permissions]]
+name = "wt.login"
+description = "Allows the player to log in after authentication"
+default = "false"
+
+[[tool.endstone.permissions]]
+name = "wt.register"
+description = "Allows the player to initiate the registration process"
+default = "true"
+
+[[tool.endstone.commands]]
+name = "auth"
+description = "Authentication command"
+usage = "/auth"
+permission = "wt.register"
