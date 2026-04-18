@@ -3,6 +3,17 @@ import sqlite3
 from endstone.plugin import Plugin
 
 class WaffenAuth(Plugin):
+    commands = {
+        "register": {
+            "description": "Register on the server",
+            "usages": ["/register <password>"],
+        },
+        "login": {
+            "description": "Login to the server",
+            "usages": ["/login <password>"],
+        },
+    }
+
     def on_enable(self) -> None:
         self.logger.info("§aWaffenAuth v0.3.0 загружен!")
         
@@ -19,7 +30,7 @@ class WaffenAuth(Plugin):
         
         self.logger.info(f"  - База данных: {self.db_path}")
         
-        # Запускаем напоминания через scheduler (каждые 40 тиков = 2 секунды)
+        # Запускаем напоминания
         self.server.scheduler.run_task(self, self.reminder_tick, delay=20, period=40)
         
         self.logger.info("§aПлагин готов к работе!")
@@ -33,14 +44,14 @@ class WaffenAuth(Plugin):
         default_config = {
             "timeout": 30,
             "messages": {
-                "register_success": "§aВы успешно зарегистрированы!",
-                "login_success": "§aВы успешно вошли на сервер!",
-                "register_exists": "§cВы уже зарегистрированы!",
-                "wrong_password": "§cНеверный пароль!",
-                "not_registered": "§cВы не зарегистрированы!",
+                "register_success": "§aYou have successfully registered!",
+                "login_success": "§aYou have successfully logged in!",
+                "register_exists": "§cYou are already registered!",
+                "wrong_password": "§cWrong password!",
+                "not_registered": "§cYou are not registered!",
                 "reminder_title": "§e========== WaffenAuth ==========",
-                "reminder_register": "§a/register <пароль> §7- Регистрация",
-                "reminder_login": "§a/login <пароль> §7- Вход",
+                "reminder_register": "§a/register <password> §7- Register",
+                "reminder_login": "§a/login <password> §7- Login",
                 "reminder_footer": "§e================================="
             }
         }
@@ -71,18 +82,17 @@ class WaffenAuth(Plugin):
         conn.close()
     
     def reminder_tick(self) -> None:
-        """Отправляет напоминания неавторизованным игрокам"""
         try:
             players = self.server.get_online_players()
             msgs = self.config.get("messages", {})
             for player in players:
                 if player.name not in self.auth_players:
                     player.send_message(msgs.get("reminder_title", "§e========== WaffenAuth =========="))
-                    player.send_message(msgs.get("reminder_register", "§a/register <пароль> §7- Регистрация"))
-                    player.send_message(msgs.get("reminder_login", "§a/login <пароль> §7- Вход"))
+                    player.send_message(msgs.get("reminder_register", "§a/register <password> §7- Register"))
+                    player.send_message(msgs.get("reminder_login", "§a/login <password> §7- Login"))
                     player.send_message(msgs.get("reminder_footer", "§e================================="))
         except Exception as e:
-            self.logger.error(f"Ошибка в reminder_tick: {e}")
+            self.logger.error(f"Error: {e}")
     
     def on_command(self, sender, command, args):
         from endstone import Player
@@ -91,14 +101,13 @@ class WaffenAuth(Plugin):
             return True
         
         cmd = command.name
-        msgs = self.config.get("messages", {})
         
         if cmd == "register" and len(args) >= 1:
             name = sender.name
             password = args[0]
             
             if len(password) < 4:
-                sender.send_message("§cПароль должен быть не менее 4 символов")
+                sender.send_message("§cPassword must be at least 4 characters")
                 return True
             
             conn = sqlite3.connect(self.db_path)
@@ -107,7 +116,7 @@ class WaffenAuth(Plugin):
             exists = cursor.fetchone()
             
             if exists:
-                sender.send_message(msgs.get("register_exists", "§cУже зарегистрирован!"))
+                sender.send_message("§cYou are already registered!")
                 conn.close()
                 return True
             
@@ -116,8 +125,8 @@ class WaffenAuth(Plugin):
             conn.commit()
             conn.close()
             
-            sender.send_message(msgs.get("register_success", "§aРегистрация успешна!"))
-            self.logger.info(f"Игрок {name} зарегистрировался")
+            sender.send_message("§aYou have successfully registered!")
+            self.logger.info(f"Player {name} registered")
             return True
         
         elif cmd == "login" and len(args) >= 1:
@@ -131,15 +140,15 @@ class WaffenAuth(Plugin):
             conn.close()
             
             if not row:
-                sender.send_message(msgs.get("not_registered", "§cНе зарегистрирован! Используйте /register"))
+                sender.send_message("§cYou are not registered! Use /register")
                 return True
             
             if row[0] == password:
                 self.auth_players.add(name)
-                sender.send_message(msgs.get("login_success", "§aВы успешно вошли!"))
-                self.logger.info(f"Игрок {name} авторизовался")
+                sender.send_message("§aYou have successfully logged in!")
+                self.logger.info(f"Player {name} logged in")
             else:
-                sender.send_message(msgs.get("wrong_password", "§cНеверный пароль!"))
+                sender.send_message("§cWrong password!")
             
             return True
         
