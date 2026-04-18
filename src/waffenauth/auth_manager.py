@@ -9,8 +9,7 @@ class AuthManager:
         self.logged_in = set()
         self.timeout_tasks = {}
     
-    def init_database(self) -> None:
-        """Инициализирует базу данных"""
+    def init_database(self) -> None
         db_file = self.plugin.config.get('database.file', 'WaffenAuth/auth.db')
         self.db = Database(db_file)
     
