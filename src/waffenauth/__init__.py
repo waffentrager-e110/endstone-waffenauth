@@ -7,28 +7,32 @@ class WaffenAuth(Plugin):
     def on_enable(self) -> None:
         self.logger.info("§aWaffenAuth v0.3.0 загружен!")
         
-        # Создаём папку
-        self.data_folder = "WaffenAuth"
+        # Определяем папку плагина (внутри plugins)
+        self.data_folder = os.path.join(os.getcwd(), "plugins", "endstone_waffenauth")
+        
+        # Создаём папку если нет
         if not os.path.exists(self.data_folder):
             os.makedirs(self.data_folder)
+            self.logger.info(f"  - Создана папка: {self.data_folder}")
         
         # Загружаем конфиг
         self.config = self.load_config()
         
         # Инициализируем БД
-        self.db_path = f"{self.data_folder}/auth.db"
+        self.db_path = os.path.join(self.data_folder, "auth.db")
         self.init_database()
         
-        # Хранилище авторизованных
-        self.logged_in = set()
+        # Хранилище авторизованных игроков
+        self.auth_players = set()
         
-        self.logger.info(f"  - Time-out: {self.config.get('timeout', 30)} сек.")
+        timeout = self.config.get("timeout", 30)
+        self.logger.info(f"  - Time-out: {timeout} сек.")
+        self.logger.info(f"  - База данных: {self.db_path}")
         
         # Запускаем напоминания
         self.reminder_task = asyncio.create_task(self.reminder_loop())
         
-        # Регистрируем команды
-        self.register_commands()
+        self.logger.info("§aПлагин готов к работе!")
     
     def on_disable(self) -> None:
         if hasattr(self, 'reminder_task') and self.reminder_task:
@@ -37,7 +41,9 @@ class WaffenAuth(Plugin):
     
     def load_config(self) -> dict:
         """Загружает или создаёт конфиг"""
-        config_file = f"{self.data_folder}/config.toml"
+        config_file = os.path.join(self.data_folder, "config.toml")
+        
+        # Конфиг по умолчанию
         default_config = {
             "timeout": 30,
             "messages": {
@@ -45,8 +51,7 @@ class WaffenAuth(Plugin):
                 "login_success": "§aВы успешно вошли на сервер!",
                 "register_exists": "§cВы уже зарегистрированы!",
                 "wrong_password": "§cНеверный пароль!",
-                "not_registered": "§cВы не зарегистрированы!",
-                "move_blocked": "§cВы не авторизованы!",
+                "not_registered": "§cВы не зарегистрированы! Используйте /register",
                 "reminder_title": "§e========== WaffenAuth ==========",
                 "reminder_register": "§a/register <пароль> §7- Регистрация",
                 "reminder_login": "§a/login <пароль> §7- Вход",
@@ -54,12 +59,18 @@ class WaffenAuth(Plugin):
             }
         }
         
+        # Если конфига нет — создаём
         if not os.path.exists(config_file):
-            import tomli_w
-            with open(config_file, "wb") as f:
-                tomli_w.dump(default_config, f)
+            with open(config_file, "w", encoding="utf-8") as f:
+                f.write(f"# WaffenAuth Configuration\n")
+                f.write(f"timeout = {default_config['timeout']}\n\n")
+                f.write(f"[messages]\n")
+                for k, v in default_config["messages"].items():
+                    f.write(f'{k} = "{v}"\n')
+            self.logger.info("  - Создан config.toml")
             return default_config
         
+        # Загружаем существующий конфиг
         import tomllib
         with open(config_file, "rb") as f:
             return tomllib.load(f)
@@ -77,12 +88,7 @@ class WaffenAuth(Plugin):
         ''')
         conn.commit()
         conn.close()
-    
-    def register_commands(self) -> None:
-        """Регистрирует команды через менеджер команд"""
-        # В Endstone команды регистрируются через plugin.yml,
-        # но пока сделаем через обработку сообщений в on_command
-        pass
+        self.logger.info("  - База данных готова")
     
     async def reminder_loop(self) -> None:
         """Отправляет напоминания каждые 2 секунды"""
@@ -90,18 +96,18 @@ class WaffenAuth(Plugin):
             await asyncio.sleep(2)
             try:
                 players = self.get_server().get_online_players()
+                msgs = self.config.get("messages", {})
                 for player in players:
-                    if player.name not in self.logged_in:
-                        msg = self.config["messages"]
-                        player.send_message(msg["reminder_title"])
-                        player.send_message(msg["reminder_register"])
-                        player.send_message(msg["reminder_login"])
-                        player.send_message(msg["reminder_footer"])
+                    if player.name not in self.auth_players:
+                        player.send_message(msgs.get("reminder_title", "§e========== WaffenAuth =========="))
+                        player.send_message(msgs.get("reminder_register", "§a/register <пароль> §7- Регистрация"))
+                        player.send_message(msgs.get("reminder_login", "§a/login <пароль> §7- Вход"))
+                        player.send_message(msgs.get("reminder_footer", "§e================================="))
             except Exception as e:
                 self.logger.error(f"Ошибка в reminder_loop: {e}")
     
     def on_command(self, sender, command, args):
-        """Обработка команд"""
+        """Обработка команд /register и /login"""
         from endstone import Player
         
         if not isinstance(sender, Player):
@@ -109,7 +115,7 @@ class WaffenAuth(Plugin):
             return True
         
         cmd = command.name
-        msgs = self.config["messages"]
+        msgs = self.config.get("messages", {})
         
         if cmd == "register" and len(args) >= 1:
             name = sender.name
@@ -125,7 +131,7 @@ class WaffenAuth(Plugin):
             exists = cursor.fetchone()
             
             if exists:
-                sender.send_message(msgs["register_exists"])
+                sender.send_message(msgs.get("register_exists", "§cВы уже зарегистрированы!"))
                 conn.close()
                 return True
             
@@ -134,7 +140,8 @@ class WaffenAuth(Plugin):
             conn.commit()
             conn.close()
             
-            sender.send_message(msgs["register_success"])
+            sender.send_message(msgs.get("register_success", "§aВы успешно зарегистрированы!"))
+            self.logger.info(f"Игрок {name} зарегистрировался")
             return True
         
         elif cmd == "login" and len(args) >= 1:
@@ -148,17 +155,15 @@ class WaffenAuth(Plugin):
             conn.close()
             
             if not row:
-                sender.send_message(msgs["not_registered"])
+                sender.send_message(msgs.get("not_registered", "§cВы не зарегистрированы!"))
                 return True
             
             if row[0] == password:
-                self.logged_in.add(name)
-                sender.send_message(msgs["login_success"])
-                
-                # Запускаем таймер отключения через 30 секунд? Нет, снимаем блокировку
+                self.auth_players.add(name)
+                sender.send_message(msgs.get("login_success", "§aВы успешно вошли на сервер!"))
                 self.logger.info(f"Игрок {name} авторизовался")
             else:
-                sender.send_message(msgs["wrong_password"])
+                sender.send_message(msgs.get("wrong_password", "§cНеверный пароль!"))
             
             return True
         
