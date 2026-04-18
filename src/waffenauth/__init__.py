@@ -21,8 +21,6 @@ class WaffenAuth(Plugin):
         if not os.path.exists(self.data_folder):
             os.makedirs(self.data_folder)
         
-        self.config = self.load_config()
-        
         self.db_path = os.path.join(self.data_folder, "auth.db")
         self.init_database()
         
@@ -37,36 +35,6 @@ class WaffenAuth(Plugin):
     
     def on_disable(self) -> None:
         self.logger.info("§cWaffenAuth выгружен.")
-    
-    def load_config(self) -> dict:
-        config_file = os.path.join(self.data_folder, "config.toml")
-        
-        default_config = {
-            "timeout": 30,
-            "messages": {
-                "register_success": "§aYou have successfully registered!",
-                "login_success": "§aYou have successfully logged in!",
-                "register_exists": "§cYou are already registered!",
-                "wrong_password": "§cWrong password!",
-                "not_registered": "§cYou are not registered!",
-                "reminder_title": "§e========== WaffenAuth ==========",
-                "reminder_register": "§a/register <password> §7- Register",
-                "reminder_login": "§a/login <password> §7- Login",
-                "reminder_footer": "§e================================="
-            }
-        }
-        
-        if not os.path.exists(config_file):
-            with open(config_file, "w", encoding="utf-8") as f:
-                f.write(f"timeout = {default_config['timeout']}\n\n")
-                f.write("[messages]\n")
-                for k, v in default_config["messages"].items():
-                    f.write(f'{k} = "{v}"\n')
-            return default_config
-        
-        import tomllib
-        with open(config_file, "rb") as f:
-            return tomllib.load(f)
     
     def init_database(self) -> None:
         conn = sqlite3.connect(self.db_path)
@@ -84,13 +52,12 @@ class WaffenAuth(Plugin):
     def reminder_tick(self) -> None:
         try:
             players = self.server.get_online_players()
-            msgs = self.config.get("messages", {})
             for player in players:
                 if player.name not in self.auth_players:
-                    player.send_message(msgs.get("reminder_title", "§e========== WaffenAuth =========="))
-                    player.send_message(msgs.get("reminder_register", "§a/register <password> §7- Register"))
-                    player.send_message(msgs.get("reminder_login", "§a/login <password> §7- Login"))
-                    player.send_message(msgs.get("reminder_footer", "§e================================="))
+                    player.send_message("§e========== WaffenAuth ==========")
+                    player.send_message("§a/register <password> §7- Register")
+                    player.send_message("§a/login <password> §7- Login")
+                    player.send_message("§e=================================")
         except Exception as e:
             self.logger.error(f"Error: {e}")
     
