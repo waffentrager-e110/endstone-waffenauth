@@ -2,21 +2,26 @@ import os
 import sqlite3
 from endstone.plugin import Plugin
 
+# Хранилище вне класса (глобальное)
+_auth_players = set()
+_db_path = None
+
 class WaffenAuth(Plugin):
     def on_enable(self) -> None:
+        global _db_path
+        
         my_data_folder = os.path.join(os.getcwd(), "plugins", "endstone_waffenauth")
         if not os.path.exists(my_data_folder):
             os.makedirs(my_data_folder)
         
-        self.db_path = os.path.join(my_data_folder, "auth.db")
-        self.init_database()
-        self.auth_players = set()
+        _db_path = os.path.join(my_data_folder, "auth.db")
+        self._init_database()
     
     def on_disable(self) -> None:
         pass
     
-    def init_database(self) -> None:
-        conn = sqlite3.connect(self.db_path)
+    def _init_database(self) -> None:
+        conn = sqlite3.connect(_db_path)
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
@@ -44,7 +49,7 @@ class WaffenAuth(Plugin):
                 sender.send_message("§cPassword must be at least 4 characters")
                 return True
             
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(_db_path)
             cursor = conn.cursor()
             cursor.execute("SELECT 1 FROM users WHERE name = ?", (name.lower(),))
             exists = cursor.fetchone()
@@ -66,7 +71,7 @@ class WaffenAuth(Plugin):
             name = sender.name
             password = args[0]
             
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(_db_path)
             cursor = conn.cursor()
             cursor.execute("SELECT password FROM users WHERE name = ?", (name.lower(),))
             row = cursor.fetchone()
@@ -77,7 +82,7 @@ class WaffenAuth(Plugin):
                 return True
             
             if row[0] == password:
-                self.auth_players.add(name)
+                _auth_players.add(name)
                 sender.send_message("§aYou have successfully logged in!")
             else:
                 sender.send_message("§cWrong password!")
