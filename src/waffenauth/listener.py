@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING
-from endstone.event import PlayerCommandPreprocessEvent, PlayerMoveEvent, event_handler
+from endstone.event import event_handler
+from endstone.events.player import PlayerMoveEvent, PlayerCommandPreprocessEvent
 
 if TYPE_CHECKING:
     from endstone_waffenauth import WaffenAuth
@@ -10,7 +11,6 @@ class WaffenAuthListener:
 
     @event_handler
     def on_player_move(self, event: PlayerMoveEvent) -> None:
-        """Блокирует движение неавторизованных игроков"""
         player = event.player
         if player.name not in self._plugin.auth_players:
             event.cancel()
@@ -18,7 +18,6 @@ class WaffenAuthListener:
 
     @event_handler
     def on_player_command(self, event: PlayerCommandPreprocessEvent) -> None:
-        """Разрешает только /register и /login неавторизованным"""
         player = event.player
         if player.name in self._plugin.auth_players:
             return
