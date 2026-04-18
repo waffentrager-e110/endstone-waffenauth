@@ -6,25 +6,23 @@ class WaffenAuth(Plugin):
     def on_enable(self) -> None:
         self.logger.info("§aWaffenAuth v0.3.0 загружен!")
         
-        self.data_folder = os.path.join(os.getcwd(), "plugins", "endstone_waffenauth")
-        if not os.path.exists(self.data_folder):
-            os.makedirs(self.data_folder)
+        self._data_folder = os.path.join(os.getcwd(), "plugins", "endstone_waffenauth")
+        if not os.path.exists(self._data_folder):
+            os.makedirs(self._data_folder)
         
-        # Создаём config.toml если нет
-        config_file = os.path.join(self.data_folder, "config.toml")
+        config_file = os.path.join(self._data_folder, "config.toml")
         if not os.path.exists(config_file):
             with open(config_file, "w") as f:
                 f.write('timeout = 30\n')
             self.logger.info("  - Создан config.toml")
         
-        self.db_path = os.path.join(self.data_folder, "auth.db")
+        self.db_path = os.path.join(self._data_folder, "auth.db")
         self.init_database()
         
         self.auth_players = set()
         
         self.logger.info(f"  - База данных: {self.db_path}")
         
-        # Запускаем напоминания
         self.server.scheduler.run_task(self, self.reminder_tick, delay=20, period=40)
         
         self.logger.info("§aПлагин готов к работе!")
