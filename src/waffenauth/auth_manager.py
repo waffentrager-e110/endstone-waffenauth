@@ -50,11 +50,9 @@ class AuthManager:
         return False
     
     def is_logged_in(self, player: Player) -> bool:
-        """Проверяет авторизован ли игрок"""
         return player.name in self.logged_in
     
     def start_timeout(self, player: Player) -> None:
-        """Запускает таймер на отключение"""
         timeout = self.plugin.config.get('timeout', 30)
         
         async def kick_task():
