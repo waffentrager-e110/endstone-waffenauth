@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "waffenauth"
+name = "endstone-waffenauth"
 version = "1.0.0"
 description = "An authentication plugin using GUI forms."
 authors = [{ name = "Waffentrager" }]
