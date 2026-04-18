@@ -4,22 +4,16 @@ from endstone.plugin import Plugin
 
 class WaffenAuth(Plugin):
     def on_enable(self) -> None:
-        self.get_logger().info("§aWaffenAuth v0.3.0 загружен!")
-        
         my_data_folder = os.path.join(os.getcwd(), "plugins", "endstone_waffenauth")
         if not os.path.exists(my_data_folder):
             os.makedirs(my_data_folder)
         
         self.db_path = os.path.join(my_data_folder, "auth.db")
         self.init_database()
-        
         self.auth_players = set()
-        
-        self.get_logger().info(f"  - База данных: {self.db_path}")
-        self.get_logger().info("§aПлагин готов к работе!")
     
     def on_disable(self) -> None:
-        self.get_logger().info("§cWaffenAuth выгружен.")
+        pass
     
     def init_database(self) -> None:
         conn = sqlite3.connect(self.db_path)
@@ -66,7 +60,6 @@ class WaffenAuth(Plugin):
             conn.close()
             
             sender.send_message("§aYou have successfully registered!")
-            self.get_logger().info(f"Player {name} registered")
             return True
         
         elif cmd == "login" and len(args) >= 1:
@@ -86,7 +79,6 @@ class WaffenAuth(Plugin):
             if row[0] == password:
                 self.auth_players.add(name)
                 sender.send_message("§aYou have successfully logged in!")
-                self.get_logger().info(f"Player {name} logged in")
             else:
                 sender.send_message("§cWrong password!")
             
