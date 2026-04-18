@@ -1,151 +1,148 @@
-from time import time
-from endstone import ColorFormat
-from endstone.command import Command, CommandSender
+import asyncio
+import os
+import sqlite3
 from endstone.plugin import Plugin
-from typing_extensions import override
-
-from endstone_waffenauth.database import check_password, initialize_database, register_user, user_exists
-from endstone_waffenauth.listener import WaffenAuthListener
 
 class WaffenAuth(Plugin):
-    description = "WaffenAuth - система авторизации"
-    version = "0.3.0"
-    api_version = "0.11"
-    authors = ["Waffentrager"]
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.auth_players: set[str] = set()
-        self.db_path: str | None = None
-
-    commands = {
-        "register": {
-            "description": "Регистрация на сервере",
-            "usages": ["/register <пароль>"],
-            "permissions": ["waffenauth.register"],
-        },
-        "login": {
-            "description": "Вход на сервер",
-            "usages": ["/login <пароль>"],
-            "permissions": ["waffenauth.login"],
-        },
-    }
-
-    permissions = {
-        "waffenauth.register": {
-            "description": "Позволяет регистрироваться",
-            "default": True,
-        },
-        "waffenauth.login": {
-            "description": "Позволяет войти",
-            "default": True,
-        },
-    }
-
-    @override
-    def on_load(self) -> None:
-        """Вызывается при загрузке плагина"""
-        self.db_path = initialize_database(self.data_folder)
-        self.logger.info(f"WaffenAuth is loading... (v{self.version})")
-
-    @override
     def on_enable(self) -> None:
-        """Вызывается при включении плагина"""
-        self.save_default_config()
-        self.register_events(WaffenAuthListener(self))
+        self.logger.info("§aWaffenAuth v0.3.0 загружен!")
         
-        # Запускаем напоминания (каждые 2 секунды = 40 тиков)
-        self.server.scheduler.run_task(self, self._reminder_tick, delay=20, period=40)
+        self.data_folder = os.path.join(os.getcwd(), "plugins", "endstone_waffenauth")
+        if not os.path.exists(self.data_folder):
+            os.makedirs(self.data_folder)
         
-        self.logger.info(f"WaffenAuth has been enabled! (v{self.version})")
-
-    @override
+        self.config = self.load_config()
+        
+        self.db_path = os.path.join(self.data_folder, "auth.db")
+        self.init_database()
+        
+        self.auth_players = set()
+        
+        self.logger.info(f"  - База данных: {self.db_path}")
+        
+        self.reminder_task = asyncio.create_task(self.reminder_loop())
+        
+        self.logger.info("§aПлагин готов к работе!")
+    
     def on_disable(self) -> None:
-        """Вызывается при выключении плагина"""
-        self.logger.info(f"WaffenAuth has been disabled! (v{self.version})")
-
-    def get_message(self, key: str) -> str:
-        """Возвращает сообщение из конфига"""
-        messages = self.config.get("messages", {})
-        default_messages = {
-            "register_success": "§aВы успешно зарегистрированы!",
-            "login_success": "§aВы успешно вошли на сервер!",
-            "register_exists": "§cВы уже зарегистрированы!",
-            "wrong_password": "§cНеверный пароль!",
-            "not_registered": "§cВы не зарегистрированы!",
-            "move_blocked": "§cВы не авторизованы!",
-            "command_blocked": "§cСначала авторизуйтесь! Используйте /register или /login",
-            "reminder_title": "§e========== WaffenAuth ==========",
-            "reminder_register": "§a/register <пароль> §7- Регистрация",
-            "reminder_login": "§a/login <пароль> §7- Вход",
-            "reminder_footer": "§e=================================",
+        if hasattr(self, 'reminder_task') and self.reminder_task:
+            self.reminder_task.cancel()
+        self.logger.info("§cWaffenAuth выгружен.")
+    
+    def load_config(self) -> dict:
+        config_file = os.path.join(self.data_folder, "config.toml")
+        
+        default_config = {
+            "timeout": 30,
+            "messages": {
+                "register_success": "§aВы успешно зарегистрированы!",
+                "login_success": "§aВы успешно вошли на сервер!",
+                "register_exists": "§cВы уже зарегистрированы!",
+                "wrong_password": "§cНеверный пароль!",
+                "not_registered": "§cВы не зарегистрированы!",
+                "reminder_title": "§e========== WaffenAuth ==========",
+                "reminder_register": "§a/register <пароль> §7- Регистрация",
+                "reminder_login": "§a/login <пароль> §7- Вход",
+                "reminder_footer": "§e================================="
+            }
         }
-        return messages.get(key, default_messages.get(key, key))
-
-    def _reminder_tick(self) -> None:
-        """Отправляет напоминания неавторизованным игрокам"""
-        for player in self.server.get_online_players():
-            if player.name not in self.auth_players:
-                player.send_message(self.get_message("reminder_title"))
-                player.send_message(self.get_message("reminder_register"))
-                player.send_message(self.get_message("reminder_login"))
-                player.send_message(self.get_message("reminder_footer"))
-
-    def on_command(self, sender: CommandSender, command: Command, args: list[str]) -> bool:
+        
+        if not os.path.exists(config_file):
+            with open(config_file, "w", encoding="utf-8") as f:
+                f.write(f"timeout = {default_config['timeout']}\n\n")
+                f.write("[messages]\n")
+                for k, v in default_config["messages"].items():
+                    f.write(f'{k} = "{v}"\n')
+            return default_config
+        
+        import tomllib
+        with open(config_file, "rb") as f:
+            return tomllib.load(f)
+    
+    def init_database(self) -> None:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                name TEXT PRIMARY KEY,
+                password TEXT NOT NULL,
+                register_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        conn.commit()
+        conn.close()
+    
+    async def reminder_loop(self) -> None:
+        while True:
+            await asyncio.sleep(2)
+            try:
+                players = self.get_server().get_online_players()
+                msgs = self.config.get("messages", {})
+                for player in players:
+                    if player.name not in self.auth_players:
+                        player.send_message(msgs.get("reminder_title", "§e========== WaffenAuth =========="))
+                        player.send_message(msgs.get("reminder_register", "§a/register <пароль> §7- Регистрация"))
+                        player.send_message(msgs.get("reminder_login", "§a/login <пароль> §7- Вход"))
+                        player.send_message(msgs.get("reminder_footer", "§e================================="))
+            except Exception as e:
+                self.logger.error(f"Ошибка: {e}")
+    
+    def on_command(self, sender, command, args):
         from endstone import Player
         
         if not isinstance(sender, Player):
-            sender.send_message(f"{ColorFormat.RED}Only players can use this command.")
             return True
-
-        match command.name:
-            case "register":
-                return self._handle_register(sender, args)
-            case "login":
-                return self._handle_login(sender, args)
+        
+        cmd = command.name
+        msgs = self.config.get("messages", {})
+        
+        if cmd == "register" and len(args) >= 1:
+            name = sender.name
+            password = args[0]
+            
+            if len(password) < 4:
+                sender.send_message("§cПароль должен быть не менее 4 символов")
+                return True
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM users WHERE name = ?", (name.lower(),))
+            exists = cursor.fetchone()
+            
+            if exists:
+                sender.send_message(msgs.get("register_exists", "§cУже зарегистрирован!"))
+                conn.close()
+                return True
+            
+            cursor.execute("INSERT INTO users (name, password) VALUES (?, ?)",
+                          (name.lower(), password))
+            conn.commit()
+            conn.close()
+            
+            sender.send_message(msgs.get("register_success", "§aРегистрация успешна!"))
+            return True
+        
+        elif cmd == "login" and len(args) >= 1:
+            name = sender.name
+            password = args[0]
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT password FROM users WHERE name = ?", (name.lower(),))
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                sender.send_message(msgs.get("not_registered", "§cНе зарегистрирован!"))
+                return True
+            
+            if row[0] == password:
+                self.auth_players.add(name)
+                sender.send_message(msgs.get("login_success", "§aВход выполнен!"))
+                self.logger.info(f"{name} авторизовался")
+            else:
+                sender.send_message(msgs.get("wrong_password", "§cНеверный пароль!"))
+            
+            return True
+        
         return False
-
-    def _handle_register(self, player: Player, args: list[str]) -> bool:
-        if len(args) != 1:
-            player.send_message(f"{ColorFormat.RED}Usage: /register <password>")
-            return True
-
-        password = args[0]
-        name = player.name
-
-        if len(password) < 4:
-            player.send_message(f"{ColorFormat.RED}Password must be at least 4 characters.")
-            return True
-
-        if user_exists(str(self.db_path), name):
-            player.send_message(self.get_message("register_exists"))
-            return True
-
-        if register_user(str(self.db_path), name, password):
-            player.send_message(self.get_message("register_success"))
-            self.logger.info(f"Player {name} registered")
-        else:
-            player.send_message(f"{ColorFormat.RED}Registration failed.")
-        
-        return True
-
-    def _handle_login(self, player: Player, args: list[str]) -> bool:
-        if len(args) != 1:
-            player.send_message(f"{ColorFormat.RED}Usage: /login <password>")
-            return True
-
-        password = args[0]
-        name = player.name
-
-        if not user_exists(str(self.db_path), name):
-            player.send_message(self.get_message("not_registered"))
-            return True
-
-        if check_password(str(self.db_path), name, password):
-            self.auth_players.add(name)
-            player.send_message(self.get_message("login_success"))
-            self.logger.info(f"Player {name} logged in")
-        else:
-            player.send_message(self.get_message("wrong_password"))
-        
-        return True
