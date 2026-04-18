@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "endstone-waffenauth"
-version = "0.1.0"
-description = "WaffenAuth - система авторизации с GUI для Endstone"
+version = "0.3.0"
+description = "WaffenAuth - система авторизации для Endstone"
 dependencies = []
 requires-python = ">=3.10"
 
 [project.entry-points."endstone"]
-waffenauth = "waffenauth:WaffenAuth"
+waffenauth = "endstone_waffenauth:WaffenAuth"
 
 [tool.setuptools.packages.find]
 where = ["src"]
