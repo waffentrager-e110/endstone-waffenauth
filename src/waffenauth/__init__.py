@@ -6,16 +6,9 @@ class WaffenAuth(Plugin):
     def on_enable(self) -> None:
         self.logger.info("§aWaffenAuth v0.3.0 загружен!")
         
-        # Используем уникальное имя, не конфликтующее с родительским классом
         my_data_folder = os.path.join(os.getcwd(), "plugins", "endstone_waffenauth")
         if not os.path.exists(my_data_folder):
             os.makedirs(my_data_folder)
-        
-        config_file = os.path.join(my_data_folder, "config.toml")
-        if not os.path.exists(config_file):
-            with open(config_file, "w") as f:
-                f.write('timeout = 30\n')
-            self.logger.info("  - Создан config.toml")
         
         self.db_path = os.path.join(my_data_folder, "auth.db")
         self.init_database()
@@ -23,12 +16,6 @@ class WaffenAuth(Plugin):
         self.auth_players = set()
         
         self.logger.info(f"  - База данных: {self.db_path}")
-        
-        try:
-            self.server.scheduler.run_task(self, self.reminder_tick, delay=20, period=40)
-        except Exception as e:
-            self.logger.error(f"Ошибка запуска scheduler: {e}")
-        
         self.logger.info("§aПлагин готов к работе!")
     
     def on_disable(self) -> None:
@@ -46,18 +33,6 @@ class WaffenAuth(Plugin):
         ''')
         conn.commit()
         conn.close()
-    
-    def reminder_tick(self) -> None:
-        try:
-            players = self.server.getOnlinePlayers()
-            for player in players:
-                if player.name not in self.auth_players:
-                    player.send_message("§e========== WaffenAuth ==========")
-                    player.send_message("§a/register <password> §7- Register")
-                    player.send_message("§a/login <password> §7- Login")
-                    player.send_message("§e=================================")
-        except Exception as e:
-            self.logger.error(f"Ошибка reminder: {e}")
     
     def on_command(self, sender, command, args):
         from endstone import Player
