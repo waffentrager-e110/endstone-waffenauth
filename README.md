@@ -1,1 +1,3 @@
-# endstone-waffenauth
+# WaffenAuth
+
+Система авторизации для Endstone
