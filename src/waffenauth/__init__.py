@@ -3,23 +3,19 @@ import sqlite3
 from endstone.plugin import Plugin
 
 class WaffenAuth(Plugin):
-    commands = {
-        "register": {
-            "description": "Register on the server",
-            "usages": ["/register <password>"],
-        },
-        "login": {
-            "description": "Login to the server",
-            "usages": ["/login <password>"],
-        },
-    }
-
     def on_enable(self) -> None:
         self.logger.info("§aWaffenAuth v0.3.0 загружен!")
         
         self.data_folder = os.path.join(os.getcwd(), "plugins", "endstone_waffenauth")
         if not os.path.exists(self.data_folder):
             os.makedirs(self.data_folder)
+        
+        # Создаём config.toml если нет
+        config_file = os.path.join(self.data_folder, "config.toml")
+        if not os.path.exists(config_file):
+            with open(config_file, "w") as f:
+                f.write('timeout = 30\n')
+            self.logger.info("  - Создан config.toml")
         
         self.db_path = os.path.join(self.data_folder, "auth.db")
         self.init_database()
@@ -51,7 +47,7 @@ class WaffenAuth(Plugin):
     
     def reminder_tick(self) -> None:
         try:
-            players = self.server.get_online_players()
+            players = self.server.getOnlinePlayers()
             for player in players:
                 if player.name not in self.auth_players:
                     player.send_message("§e========== WaffenAuth ==========")
